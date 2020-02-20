@@ -155,7 +155,8 @@ class Tacotron2():
             #self.stop_token_outputs = stop_token_outputs
             self.all_vars = tf.trainable_variables()
             log('Initialized Tacotron model. Dimensions: ')
-            log('  embedding:               %d' % c_embedded_inputs.shape[-1]+p_embedded_inputs.shape[-1])
+            log('  c_embedding:               %d' % c_embedded_inputs.shape[-1])
+            log('  p_embedding:               %d' % p_embedded_inputs.shape[-1])
             # log('  prenet out:              %d' % prenet_outputs.shape[-1])
             log('  encoder out:             %d' % encoder_outputs.shape[-1])
             log('  attention out:           %d' % attention_cell.output_size)
