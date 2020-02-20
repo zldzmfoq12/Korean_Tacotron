@@ -42,7 +42,7 @@ class TacoTrainingHelper(Helper):
     def __init__(self, c_inputs, p_inputs, targets, output_dim, r):
         # inputs is [N, T_in], targets is [N, T_out, D]
         with tf.name_scope('TacoTrainingHelper'):
-            self._batch_size = (tf.shape(c_inputs)[0]+tf.shape(p_inputs)[0])/2
+            self._batch_size = tf.shape(c_inputs)[0]
             self._output_dim = output_dim
 
             # Feed every r-th target frame as input

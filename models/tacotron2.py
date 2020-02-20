@@ -34,7 +34,7 @@ class Tacotron2():
         '''
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
-            batch_size = (tf.shape(c_inputs)[0]+tf.shape(p_inputs)[0])/2 #maybe 32
+            batch_size = tf.shape(c_inputs)[0]
             input_lengths = c_input_lengths+p_input_lengths #for concat character and phoneme
             hp = self._hparams
 
