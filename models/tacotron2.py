@@ -51,13 +51,13 @@ class Tacotron2():
 
             #3 Conv Layers
             for i in range(3):
-                c_x = tf.layers.conv1d(c_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='Encoder_{}'.format(i))
+                c_x = tf.layers.conv1d(c_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='c_Encoder_{}'.format(i))
                 c_x = tf.layers.batch_normalization(c_x, training=is_training)
                 c_x = tf.layers.dropout(c_x, rate=0.5, training=is_training, name='dropout_{}'.format(i))
             c_encoder_conv_output = c_x
 
             for i in range(3):
-                p_x = tf.layers.conv1d(p_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='Encoder_{}'.format(i))
+                p_x = tf.layers.conv1d(p_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='p_Encoder_{}'.format(i))
                 p_x = tf.layers.batch_normalization(p_x, training=is_training)
                 p_x = tf.layers.dropout(p_x, rate=0.5, training=is_training, name='dropout_{}'.format(i))
             p_encoder_conv_output = p_x
