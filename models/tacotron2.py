@@ -12,7 +12,7 @@ class Tacotron2():
     def __init__(self, hparams):
         self._hparams = hparams
 
-    def initialize(self, c_inputs, p_inputs, c_input_lengths, p_input_lengths, mel_targets=None, linear_targets=None, stop_token_targets=None):
+    def initialize(self, c_inputs, p_inputs, c_input_lengths, p_input_lengths, mel_targets=None, linear_targets=None):
         '''Initializes the model for inference.
 
         Sets "mel_outputs", "linear_outputs", and "alignments" fields.
