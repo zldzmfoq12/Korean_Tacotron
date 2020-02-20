@@ -39,12 +39,11 @@ class DataFeeder(threading.Thread):
             tf.placeholder(tf.int32, [None], 'c_input_lengths'),
             tf.placeholder(tf.int32, [None], 'p_input_lengths'),
             tf.placeholder(tf.float32, [None, None, hparams.num_mels], 'mel_targets'),
-            tf.placeholder(tf.float32, [None, None, hparams.num_freq], 'linear_targets'),
-            tf.placeholder(tf.float32, [None, None], 'stop_token_targets')
+            tf.placeholder(tf.float32, [None, None, hparams.num_freq], 'linear_targets')
         ]
 
         # Create queue for buffering data:
-        queue = tf.FIFOQueue(8, [tf.int32, tf.int32, tf.int32, tf.int32, tf.float32, tf.float32, tf.float32], name='input_queue')
+        queue = tf.FIFOQueue(8, [tf.int32, tf.int32, tf.int32, tf.int32, tf.float32, tf.float32], name='input_queue')
         self._enqueue_op = queue.enqueue(self._placeholders)
         self.c_inputs, self.p_inputs, self.c_input_lengths, self.p_input_lengths, self.mel_targets, self.linear_targets = queue.dequeue()
         self.c_inputs.set_shape(self._placeholders[0].shape)
