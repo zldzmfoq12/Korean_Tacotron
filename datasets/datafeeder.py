@@ -46,11 +46,11 @@ class DataFeeder(threading.Thread):
         # Create queue for buffering data:
         queue = tf.FIFOQueue(8, [tf.int32, tf.int32, tf.float32, tf.float32, tf.float32], name='input_queue')
         self._enqueue_op = queue.enqueue(self._placeholders)
-        self.c_inputs, self.p_inputs, self.c_input_lengths, self.p_input_lenghts, self.mel_targets, self.linear_targets = queue.dequeue()
+        self.c_inputs, self.p_inputs, self.c_input_lengths, self.p_input_lengths, self.mel_targets, self.linear_targets = queue.dequeue()
         self.c_inputs.set_shape(self._placeholders[0].shape)
         self.p_inputs.set_shape(self._placeholders[1].shape)
         self.c_input_lengths.set_shape(self._placeholders[2].shape)
-        self.p_inputs.set_shape(self._placeholders[3].shape)
+        self.p_input_lengths.set_shape(self._placeholders[3].shape)
         self.mel_targets.set_shape(self._placeholders[4].shape)
         self.linear_targets.set_shape(self._placeholders[5].shape)
         self._cmudict = None
