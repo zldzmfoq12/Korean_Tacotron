@@ -74,7 +74,7 @@ class Tacotron2():
             # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
             p_encoder_outputs = tf.concat(p_outputs, axis=2)
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
-            encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=1)
+            encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=1, dtype=tf.float32)
             
         with tf.variable_scope('Decoder') as scope:
             
