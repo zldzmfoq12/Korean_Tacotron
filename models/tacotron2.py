@@ -12,15 +12,17 @@ class Tacotron2():
     def __init__(self, hparams):
         self._hparams = hparams
 
-    def initialize(self, inputs, input_lengths, mel_targets=None, linear_targets=None, stop_token_targets=None):
+    def initialize(self, c_inputs, p_inputs, c_input_lengths, p_input_lengths, mel_targets=None, linear_targets=None, stop_token_targets=None):
         '''Initializes the model for inference.
 
         Sets "mel_outputs", "linear_outputs", and "alignments" fields.
 
         Args:
-          inputs: int32 Tensor with shape [N, T_in] where N is batch size, T_in is number of
+          c_inputs: int32 Tensor with shape [N, T_in] where N is batch size, T_in is number of
             steps in the input time series, and values are character IDs
-          input_lengths: int32 Tensor with shape [N] where N is batch size and values are the lengths
+          p_inputs: int32 Tensor with shape [N, T_in] where N is batch size, T_in is number of
+            steps in the input time series, and values are phoneme IDs
+          c_input_lengths and p_input_lenghts: int32 Tensor with shape [N] where N is batch size and values are the lengths
             of each sequence in inputs.
           mel_targets: float32 Tensor with shape [N, T_out, M] where N is batch size, T_out is number
             of steps in the output time series, M is num_mels, and values are entries in the mel
@@ -31,35 +33,48 @@ class Tacotron2():
         '''
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
-            batch_size = tf.shape(inputs)[0]
+            batch_size = (tf.shape(c_inputs)[0]+tf.shape(p_inputs)[0])/2 #maybe 32
+            input_lengths = c_input_lengths+p_input_lengths #for concat character and phoneme
             hp = self._hparams
 
             # Embeddings
             embedding_table = tf.get_variable(
                 'embedding', [len(symbols), hp.embed_depth], dtype=tf.float32,
                 initializer=tf.truncated_normal_initializer(stddev=0.5))
-            
-            embedded_inputs = tf.nn.embedding_lookup(embedding_table, inputs)  # [N, T_in, embed_depth=256]
-            
+            #
+            c_embedded_inputs = tf.nn.embedding_lookup(embedding_table, c_inputs)  # [N, c_T_in, embed_depth=256]
+            p_embedded_inputs = tf.nn.embedding_lookup(embedding_table, p_inputs)  # [N, p_T_in, embed_depth=256]
         with tf.variable_scope('Encoder') as scope:
 
-            x = embedded_inputs
-            
+            c_x = c_embedded_inputs
+            p_x = p_embedded_inputs
+
             #3 Conv Layers
             for i in range(3):
-                x = tf.layers.conv1d(x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='Encoder_{}'.format(i))
-                x = tf.layers.batch_normalization(x, training=is_training)
-                x = tf.layers.dropout(x, rate=0.5, training=is_training, name='dropout_{}'.format(i))
-            encoder_conv_output = x
+                c_x = tf.layers.conv1d(c_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='Encoder_{}'.format(i))
+                c_x = tf.layers.batch_normalization(c_x, training=is_training)
+                c_x = tf.layers.dropout(c_x, rate=0.5, training=is_training, name='dropout_{}'.format(i))
+            c_encoder_conv_output = c_x
+
+            for i in range(3):
+                p_x = tf.layers.conv1d(p_x,filters=512,kernel_size=5,padding='same',activation=tf.nn.relu,name='Encoder_{}'.format(i))
+                p_x = tf.layers.batch_normalization(p_x, training=is_training)
+                p_x = tf.layers.dropout(p_x, rate=0.5, training=is_training, name='dropout_{}'.format(i))
+            p_encoder_conv_output = p_x
             
             #bi-directional LSTM
             cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
             cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
-            outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
-            
-            # envoder_outpust = [N,T,2*encoder_lstm_units] = [N,T,512]
-            encoder_outputs = tf.concat(outputs, axis=2) # Concat and return forward + backward outputs
+            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
+            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=p_input_lengths, dtype=tf.float32)
+
+            # c_envoder_outpust = [N,c_T,2*encoder_lstm_units] = [N,c_T,512]
+            c_encoder_outputs = tf.concat(c_outputs, axis=2) # Concat and return forward + backward outputs
+            # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
+            p_encoder_outputs = tf.concat(p_outputs, axis=2)
+            # Concat and return character + phoneme = [N, c_T+p_T, 512]
+            encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=1)
             
         with tf.variable_scope('Decoder') as scope:
             
@@ -92,7 +107,7 @@ class Tacotron2():
             dec_outputs_cell = OutputProjectionWrapper(dec_outputs,(hp.num_mels) * hp.outputs_per_step)
 
             if is_training:
-                helper = TacoTrainingHelper(inputs, mel_targets, hp.num_mels, hp.outputs_per_step)
+                helper = TacoTrainingHelper(c_inputs, p_inputs, mel_targets, hp.num_mels, hp.outputs_per_step)
             else:
                 helper = TacoTestHelper(batch_size, hp.num_mels, hp.outputs_per_step)
                 
@@ -125,8 +140,10 @@ class Tacotron2():
             alignments = tf.transpose(final_decoder_state.alignment_history.stack(), [1, 2, 0])  # batch_size, text length(encoder), target length(decoder)
  
 			
-            self.inputs = inputs
-            self.input_lengths = input_lengths
+            self.c_inputs = c_inputs
+            self.p_inputs = p_inputs
+            self.c_input_lengths = c_input_lengths
+            self.p_input_lengths = p_input_lengths
             self.decoder_mel_outputs = decoder_mel_outputs
             self.mel_outputs = mel_outputs
             self.linear_outputs = linear_outputs
@@ -137,7 +154,7 @@ class Tacotron2():
             #self.stop_token_outputs = stop_token_outputs
             self.all_vars = tf.trainable_variables()
             log('Initialized Tacotron model. Dimensions: ')
-            log('  embedding:               %d' % embedded_inputs.shape[-1])
+            log('  embedding:               %d' % c_embedded_inputs.shape[-1]+p_embedded_inputs.shape[-1])
             # log('  prenet out:              %d' % prenet_outputs.shape[-1])
             log('  encoder out:             %d' % encoder_outputs.shape[-1])
             log('  attention out:           %d' % attention_cell.output_size)
