@@ -6,16 +6,19 @@ from librosa import effects
 from models import create_model
 from text import text_to_sequence
 from util import audio
+from g2pk import G2p
 
 
 class Synthesizer:
     def load(self, checkpoint_path, model_name='tacotron'):
         print('Constructing model: %s' % model_name)
-        inputs = tf.placeholder(tf.int32, [1, None], 'inputs')
-        input_lengths = tf.placeholder(tf.int32, [1], 'input_lengths')
+        c_inputs = tf.placeholder(tf.int32, [1, None], 'c_inputs')
+        p_inputs = tf.placeholder(tf.int32, [1, None], 'p_inputs')
+        c_input_lengths = tf.placeholder(tf.int32, [1], 'c_input_lengths')
+        p_input_lengths = tf.placeholder(tf.int32, [1], 'p_input_lengths')
         with tf.variable_scope('model') as scope:
             self.model = create_model(model_name, hparams)
-            self.model.initialize(inputs, input_lengths)
+            self.model.initialize(c_inputs, p_inputs, c_input_lengths, p_input_lengths)
             self.wav_output = audio.inv_spectrogram_tensorflow(self.model.linear_outputs[0])
 
         print('Loading checkpoint: %s' % checkpoint_path)
@@ -26,10 +29,14 @@ class Synthesizer:
 
     def synthesize(self, text):
         cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
-        seq = text_to_sequence(text, cleaner_names)
+        g2p = G2p()
+        c_seq = text_to_sequence(text, cleaner_names)
+        p_seq = text_to_sequence(g2p(text), cleaner_names)
         feed_dict = {
-            self.model.inputs: [np.asarray(seq, dtype=np.int32)],
-            self.model.input_lengths: np.asarray([len(seq)], dtype=np.int32)
+            self.model.c_inputs: [np.asarray(c_seq, dtype=np.int32)],
+            self.model.p_inputs: [np.asarray(p_seq, dtype=np.int32)],
+            self.model.c_input_lengths: np.asarray([len(c_seq)], dtype=np.int32),
+            self.model.p_input_lengths: np.asarray([len(p_seq)], dtype=np.int32)
         }
         wav = self.session.run(self.wav_output, feed_dict=feed_dict)
         wav = audio.inv_preemphasis(wav)
