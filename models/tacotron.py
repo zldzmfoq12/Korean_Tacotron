@@ -36,9 +36,14 @@ class Tacotron2():
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
-            input_lengths = c_input_lengths
-            diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
-            p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
+            if c_input_lengths > p_input_lengths:
+                diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
+                p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
+                input_lengths = c_input_lengths
+            else:
+                diff = shape_list(p_inputs)[1]-shape_list(c_inputs)[1]
+                c_inputs = tf.pad(c_inputs, [[0, 0,], [0, diff]], "CONSTANT")
+                input_lengths = p_input_lengths
             hp = self._hparams
             
             # Embeddings
@@ -70,8 +75,8 @@ class Tacotron2():
             cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
             cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
-            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
-            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
+            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
+            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
 
             # c_envoder_outpust = [N,c_T,2*encoder_lstm_units] = [N,c_T,512]
             c_encoder_outputs = tf.concat(c_outputs, axis=2) # Concat and return forward + backward outputs
@@ -86,7 +91,7 @@ class Tacotron2():
             
             if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
                 attention_mechanism = LocationSensitiveAttention(128, encoder_outputs,hparams=hp, is_training=is_training,
-                                    mask_encoder=True, memory_sequence_length = c_input_lengths, smoothing=False, cumulate_weights=True)
+                                    mask_encoder=True, memory_sequence_length = input_lengths, smoothing=False, cumulate_weights=True)
             elif hp.attention_type == 'gmm': # GMM Attention
                 attention_mechanism = GmmAttention(128, memory=encoder_outputs, memory_sequence_length = input_lengths) 
             elif hp.attention_type == 'step_bah':
