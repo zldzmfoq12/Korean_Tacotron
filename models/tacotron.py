@@ -36,8 +36,8 @@ class Tacotron2():
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
-            diff = shape_list(c_input_lengths)[0]-shape_list(p_input_lengths)[0]
-            if shape_list(diff)[0] > 0:
+            diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
+            if c_inputs.get_shape().as_list()[1] > p_inputs.get_shape().as_list()[1]:
                 input_lengths = c_input_lengths
                 p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
             else:
