@@ -37,12 +37,19 @@ class Tacotron2():
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
             diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
-            if tf.shape(c_inputs)[1]-tf.shape(p_inputs)[1] >= 0:
-                input_lengths = c_input_lengths
-                p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
-            else:
-                input_lengths = p_input_lengths
-                c_inputs = tf.pad(c_inputs, [[0, 0,], [0, -1*diff]], "CONSTANT")
+            p_inputs = tf.cond(
+                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
+                lambda: tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT"),
+                lambda: p_inputs)
+            c_inputs = tf.cond(
+                tf.greater(tf.shape(p_inputs)[1], tf.shape(c_inputs)[1]),
+                lambda: tf.pad(c_inputs, [[0, 0,], [0, -1*diff]], "CONSTANT"),
+                lambda: c_inputs)
+            input_lengths= tf.cond(
+                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
+                lambda: c_input_lengths,
+                lambda: p_input_lengths)
+
             # input_lengths = c_input_lengths
             # diff = shape_list(c_input_lengths)[0]-shape_list(p_input_lengths)[0]
             # p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
