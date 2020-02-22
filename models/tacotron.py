@@ -65,8 +65,8 @@ class Tacotron2():
             p_encoder_conv_output = p_x
             
             #bi-directional LSTM
-            cell_fw= ZoneoutLSTMCell(128, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
-            cell_bw= ZoneoutLSTMCell(128, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
+            cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
+            cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
             c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
             p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=p_input_lengths, dtype=tf.float32)
@@ -84,7 +84,7 @@ class Tacotron2():
             
             if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
                 attention_mechanism = LocationSensitiveAttention(128, encoder_outputs,hparams=hp, is_training=is_training,
-                                    mask_encoder=True, memory_sequence_length = input_lengths, smoothing=False, cumulate_weights=True)
+                                    mask_encoder=True, memory_sequence_length = c_input_lengths, smoothing=False, cumulate_weights=True)
             elif hp.attention_type == 'gmm': # GMM Attention
                 attention_mechanism = GmmAttention(128, memory=encoder_outputs, memory_sequence_length = input_lengths) 
             elif hp.attention_type == 'step_bah':
