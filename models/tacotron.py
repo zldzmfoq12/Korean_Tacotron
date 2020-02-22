@@ -37,7 +37,7 @@ class Tacotron2():
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
             diff = shape_list(c_input_lengths)[0]-shape_list(p_input_lengths)[0]
-            if shape_list(diff) > 0:
+            if shape_list(diff)[0] > 0:
                 input_lengths = c_input_lengths
                 p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
             else:
