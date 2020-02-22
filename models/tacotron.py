@@ -38,7 +38,7 @@ class Tacotron2():
             batch_size = tf.shape(c_inputs)[0]
             input_lengths = c_input_lengths
             diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
-            print(diff)
+            shape_list(diff)[0]
             p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
             hp = self._hparams
             
