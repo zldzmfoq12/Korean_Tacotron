@@ -24,7 +24,7 @@ class Tacotron2():
             steps in the input time series, and values are character IDs
           p_inputs: int32 Tensor with shape [N, T_in] where N is batch size, T_in is number of
             steps in the input time series, and values are phoneme IDs
-          c_input_lengths and p_input_lenghts: int32 Tensor with shape [N] where N is batch size and values are the lengths
+          c_input_lengths and p_input_lengths: int32 Tensor with shape [N] where N is batch size and values are the lengths
             of each sequence in inputs.
           mel_targets: float32 Tensor with shape [N, T_out, M] where N is batch size, T_out is number
             of steps in the output time series, M is num_mels, and values are entries in the mel
@@ -65,8 +65,8 @@ class Tacotron2():
             p_encoder_conv_output = p_x
             
             #bi-directional LSTM
-            cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
-            cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
+            cell_fw= ZoneoutLSTMCell(128, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
+            cell_bw= ZoneoutLSTMCell(128, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
             c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
             p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=p_input_lengths, dtype=tf.float32)
