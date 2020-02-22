@@ -76,8 +76,8 @@ class Tacotron2():
             # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
             p_encoder_outputs = tf.concat(p_outputs, axis=2)
             diff = c_input_lengths-p_input_lengths
-            paddings = tf.Variable([[0, 0], [0, diff], [0,0]], name='paddings')
-            p_encoder_outputs = tf.pad(p_encoder_outputs, paddings, "CONSTANT") 
+            # paddings = tf.Variable([[0, 0], [0, diff], [0,0]], name='paddings')
+            p_encoder_outputs = tf.pad(p_encoder_outputs, [[0, 0], [0, diff], [0,0]], "CONSTANT") 
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
             encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=-1)
             # encoder_outputs = tf.cast(encoder_outputs, tf.float32)
