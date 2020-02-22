@@ -61,10 +61,7 @@ def train(log_dir, args):
 	global_step = tf.Variable(0, name='global_step', trainable=False)
 	with tf.variable_scope('model') as scope:
 		model = create_model(args.model, hparams)
-		diff = feeder.c_input_lengths-feeder.p_input_lengths
-		print(tf.reshape(diff, []))
-		p_inputs= tf.pad(feeder.p_inputs, [[0, 0,], [0, tf.reshape(diff, [])]], "CONSTANT")
-		model.initialize(feeder.c_inputs, p_inputs, feeder.c_input_lengths, feeder.c_input_lengths, feeder.mel_targets, feeder.linear_targets)
+		model.initialize(feeder.c_inputs, feeder.p_inputs, feeder.c_input_lengths, feeder.p_input_lengths, feeder.mel_targets, feeder.linear_targets)
 		model.add_loss()
 		model.add_optimizer(global_step)
 		stats = add_stats(model)
