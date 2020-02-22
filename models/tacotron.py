@@ -37,6 +37,9 @@ class Tacotron2():
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
             input_lengths = c_input_lengths
+            diff = c_input_lengths-p_input_lengths
+            p_inputs = tf.pad(p_inputs, [[0, 0], [0, 0+diff]], "CONSTANT")
+            p_input_lengths = c_input_lengths
             hp = self._hparams
             
             # Embeddings
@@ -75,9 +78,7 @@ class Tacotron2():
             c_encoder_outputs = tf.concat(c_outputs, axis=2) # Concat and return forward + backward outputs
             # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
             p_encoder_outputs = tf.concat(p_outputs, axis=2)
-            diff = c_input_lengths-p_input_lengths
-            # paddings = tf.Variable([[0, 0], [0, diff], [0,0]], name='paddings')
-            p_encoder_outputs = tf.pad(p_encoder_outputs, [[0, 0+diff], [0, 0]], "CONSTANT") 
+             
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
             encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=-1)
             # encoder_outputs = tf.cast(encoder_outputs, tf.float32)
