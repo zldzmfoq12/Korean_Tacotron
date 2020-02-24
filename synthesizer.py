@@ -30,8 +30,8 @@ class Synthesizer:
     def synthesize(self, text):
         cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
         g2p = G2p()
-        c_seq = text_to_sequence(text, cleaner_names)
-        p_seq = text_to_sequence(g2p(text), cleaner_names)
+        c_seq = text_to_sequence('정성스럽게 적었던 거야.', cleaner_names)
+        p_seq = text_to_sequence('정성스럽께 저걷떤 거야.', cleaner_names)
         feed_dict = {
             self.model.c_inputs: [np.asarray(c_seq, dtype=np.int32)],
             self.model.p_inputs: [np.asarray(p_seq, dtype=np.int32)],
