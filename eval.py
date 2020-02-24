@@ -7,7 +7,7 @@ from synthesizer import Synthesizer
 
 sentences = [
   # 장기하와 얼굴들 ㅋ 가사:
-  '너는 쿨쿨 자나봐.',
+#   '너는 쿨쿨 자나봐.',
   '정성스럽게 적었던 거야.',
   '이모티콘 하나마저 조심스럽게 정했어.',
 
