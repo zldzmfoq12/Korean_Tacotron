@@ -79,11 +79,11 @@ class Tacotron2():
             diff = shape_list(c_encoder_outputs)[1]-shape_list(p_encoder_outputs)[1]
             p_encoder_outputs = tf.cond(
                 tf.greater(tf.shape(c_encoder_outputs)[1], tf.shape(p_encoder_outputs)[1]),
-                lambda: tf.pad(p_encoder_outputs, [[0, 0,], [0, diff]], "CONSTANT"),
+                lambda: tf.pad(p_encoder_outputs, [[0, 0,], [0, diff,], [0, 0]], "CONSTANT"),
                 lambda: p_encoder_outputs)
             c_encoder_outputs = tf.cond(
                 tf.greater(tf.shape(p_encoder_outputs)[1], tf.shape(c_encoder_outputs)[1]),
-                lambda: tf.pad(c_encoder_outputs, [[0, 0,], [0, -1*diff]], "CONSTANT"),
+                lambda: tf.pad(c_encoder_outputs, [[0, 0,], [0, -1*diff], [0, 0]], "CONSTANT"),
                 lambda: c_encoder_outputs)
             
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
@@ -93,7 +93,7 @@ class Tacotron2():
                 tf.greater(tf.shape(c_encoder_outputs)[1], tf.shape(p_encoder_outputs)[1]),
                 lambda: c_input_lengths,
                 lambda: p_input_lengths)
-                
+
         with tf.variable_scope('Decoder') as scope:
             
             if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
