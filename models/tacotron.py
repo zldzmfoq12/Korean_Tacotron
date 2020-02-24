@@ -36,7 +36,23 @@ class Tacotron2():
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
+            diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
+            p_inputs = tf.cond(
+                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
+                lambda: tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT"),
+                lambda: p_inputs)
+            c_inputs = tf.cond(
+                tf.greater(tf.shape(p_inputs)[1], tf.shape(c_inputs)[1]),
+                lambda: tf.pad(c_inputs, [[0, 0,], [0, -1*diff]], "CONSTANT"),
+                lambda: c_inputs)
+            input_lengths= tf.cond(
+                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
+                lambda: c_input_lengths,
+                lambda: p_input_lengths)
 
+            # input_lengths = c_input_lengths
+            # diff = shape_list(c_input_lengths)[0]-shape_list(p_input_lengths)[0]
+            # p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
             hp = self._hparams
             
             # Embeddings
@@ -68,32 +84,18 @@ class Tacotron2():
             cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
             cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
-            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
-            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=p_input_lengths, dtype=tf.float32)
+            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
+            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
 
             # c_envoder_outpust = [N,c_T,2*encoder_lstm_units] = [N,c_T,512]
             c_encoder_outputs = tf.concat(c_outputs, axis=2) # Concat and return forward + backward outputs
             # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
             p_encoder_outputs = tf.concat(p_outputs, axis=2)
             
-            diff = shape_list(c_encoder_outputs)[1]-shape_list(p_encoder_outputs)[1]
-            p_encoder_outputs = tf.cond(
-                tf.greater(tf.shape(c_encoder_outputs)[1], tf.shape(p_encoder_outputs)[1]),
-                lambda: tf.pad(p_encoder_outputs, [[0, 0,], [0, diff,], [0, 0]], "CONSTANT"),
-                lambda: p_encoder_outputs)
-            c_encoder_outputs = tf.cond(
-                tf.greater(tf.shape(p_encoder_outputs)[1], tf.shape(c_encoder_outputs)[1]),
-                lambda: tf.pad(c_encoder_outputs, [[0, 0,], [0, -1*diff], [0, 0]], "CONSTANT"),
-                lambda: c_encoder_outputs)
             
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
             encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=-1)
             # encoder_outputs = tf.cast(encoder_outputs, tf.float32)
-            input_lengths= tf.cond(
-                tf.greater(tf.shape(c_encoder_outputs)[1], tf.shape(p_encoder_outputs)[1]),
-                lambda: c_input_lengths,
-                lambda: p_input_lengths)
-
         with tf.variable_scope('Decoder') as scope:
             
             if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
