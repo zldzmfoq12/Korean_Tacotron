@@ -30,6 +30,16 @@ def run_eval(args):
     synth = Synthesizer()
     synth.load(args.checkpoint)
     base_path = get_output_base_path(args.checkpoint)
+    sentences=[]
+    with open('./eval_concat.txt', encoding='utf-8') as f:
+        for line in f:
+            try:
+                parts = line.strip().replace('"', '').split('|')
+                c_text = parts[3]
+                p_text = parts[4]
+                sentences.append(c_text+'|'+p_text)
+            except:
+                pass
     for i, text in enumerate(sentences):
         path = '%s-%d.wav' % (base_path, i)
         print('Synthesizing: %s' % path)

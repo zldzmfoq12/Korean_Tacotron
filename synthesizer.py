@@ -6,7 +6,7 @@ from librosa import effects
 from models import create_model
 from text import text_to_sequence
 from util import audio
-from g2pk import G2p
+# from g2pk import G2p
 
 
 class Synthesizer:
@@ -29,9 +29,11 @@ class Synthesizer:
 
     def synthesize(self, text):
         cleaner_names = [x.strip() for x in hparams.cleaners.split(',')]
-        g2p = G2p()
-        c_seq = text_to_sequence(text, cleaner_names)
-        p_seq = text_to_sequence(g2p(text), cleaner_names)
+        # g2p = G2p()
+        c_text=text.split('|')[0]
+        p_text=text.split('|')[1]
+        c_seq = text_to_sequence(c_text, cleaner_names)
+        p_seq = text_to_sequence(p_text, cleaner_names)
         feed_dict = {
             self.model.c_inputs: [np.asarray(c_seq, dtype=np.int32)],
             self.model.p_inputs: [np.asarray(p_seq, dtype=np.int32)],
