@@ -27,7 +27,7 @@ def add_stats(model):
 	with tf.variable_scope('stats') as scope:
 		tf.summary.histogram('linear_outputs', model.p_linear_outputs)
 		tf.summary.histogram('linear_targets', model.linear_targets)
-		tf.summary.histogram('mel_outputs', model.mel_outputs)
+		tf.summary.histogram('mel_outputs', model.p_mel_outputs)
 		tf.summary.histogram('mel_targets', model.mel_targets)
 		tf.summary.scalar('loss_mel', model.mel_loss)
 		tf.summary.scalar('loss_linear', model.linear_loss)
