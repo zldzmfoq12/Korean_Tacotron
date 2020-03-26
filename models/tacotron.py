@@ -147,21 +147,21 @@ class Tacotron2():
             x = c_decoder_mel_outputs
             for i in range(5):
                 activation = tf.nn.tanh if i != (4) else None
-                x = tf.layers.conv1d(x,filters=512, kernel_size=5, padding='same', activation=activation, name='Postnet_{}'.format(i))
+                x = tf.layers.conv1d(x,filters=512, kernel_size=5, padding='same', activation=activation, name='C_Postnet_{}'.format(i))
                 x = tf.layers.batch_normalization(x, training=is_training)
-                x = tf.layers.dropout(x, rate=0.5, training=is_training, name='Postnet_dropout_{}'.format(i))
+                x = tf.layers.dropout(x, rate=0.5, training=is_training, name='C_Postnet_dropout_{}'.format(i))
  
-            c_residual = tf.layers.dense(x, hp.num_mels, name='residual_projection')
+            c_residual = tf.layers.dense(x, hp.num_mels, name='c_residual_projection')
             c_mel_outputs = c_decoder_mel_outputs + c_residual
 
             p = p_decoder_mel_outputs
             for i in range(5):
                 activation = tf.nn.tanh if i != (4) else None
-                p = tf.layers.conv1d(p,filters=512, kernel_size=5, padding='same', activation=activation, name='Postnet_{}'.format(i))
+                p = tf.layers.conv1d(p,filters=512, kernel_size=5, padding='same', activation=activation, name='P_Postnet_{}'.format(i))
                 p = tf.layers.batch_normalization(p, training=is_training)
-                p = tf.layers.dropout(p, rate=0.5, training=is_training, name='Postnet_dropout_{}'.format(i))
+                p = tf.layers.dropout(p, rate=0.5, training=is_training, name='P_Postnet_dropout_{}'.format(i))
  
-            p_residual = tf.layers.dense(p, hp.num_mels, name='residual_projection')
+            p_residual = tf.layers.dense(p, hp.num_mels, name='p_residual_projection')
             p_mel_outputs = p_decoder_mel_outputs + p_residual
 
             # Add post-processing CBHG:
