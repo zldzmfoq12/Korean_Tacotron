@@ -4,7 +4,6 @@ from tensorflow.contrib.rnn import GRUCell, MultiRNNCell, OutputProjectionWrappe
 from tensorflow.contrib.seq2seq import BasicDecoder, BahdanauAttention, AttentionWrapper, BahdanauMonotonicAttention, LuongAttention
 from text.symbols import symbols
 from util.infolog import log
-from util.ops import shape_list
 from .helpers import TacoTestHelper, TacoTrainingHelper
 from .modules import encoder_cbhg, post_cbhg, prenet, LocationSensitiveAttention, ZoneoutLSTMCell, GmmAttention, BahdanauStepwiseMonotonicAttention
 from .rnn_wrappers import DecoderPrenetWrapper, ConcatOutputAndAttentionWrapper
@@ -24,7 +23,7 @@ class Tacotron2():
             steps in the input time series, and values are character IDs
           p_inputs: int32 Tensor with shape [N, T_in] where N is batch size, T_in is number of
             steps in the input time series, and values are phoneme IDs
-          c_input_lengths and p_input_lengths: int32 Tensor with shape [N] where N is batch size and values are the lengths
+          c_input_lengths and p_input_lenghts: int32 Tensor with shape [N] where N is batch size and values are the lengths
             of each sequence in inputs.
           mel_targets: float32 Tensor with shape [N, T_out, M] where N is batch size, T_out is number
             of steps in the output time series, M is num_mels, and values are entries in the mel
@@ -36,25 +35,9 @@ class Tacotron2():
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
-            diff = shape_list(c_inputs)[1]-shape_list(p_inputs)[1]
-            p_inputs = tf.cond(
-                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
-                lambda: tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT"),
-                lambda: p_inputs)
-            c_inputs = tf.cond(
-                tf.greater(tf.shape(p_inputs)[1], tf.shape(c_inputs)[1]),
-                lambda: tf.pad(c_inputs, [[0, 0,], [0, -1*diff]], "CONSTANT"),
-                lambda: c_inputs)
-            input_lengths= tf.cond(
-                tf.greater(tf.shape(c_inputs)[1], tf.shape(p_inputs)[1]),
-                lambda: c_input_lengths,
-                lambda: p_input_lengths)
-
-            # input_lengths = c_input_lengths
-            # diff = shape_list(c_input_lengths)[0]-shape_list(p_input_lengths)[0]
-            # p_inputs = tf.pad(p_inputs, [[0, 0,], [0, diff]], "CONSTANT")
+            input_lengths = c_input_lengths+p_input_lengths #for concat character and phoneme
             hp = self._hparams
-            
+
             # Embeddings
             embedding_table = tf.get_variable(
                 'embedding', [len(symbols), hp.embed_depth], dtype=tf.float32,
@@ -84,31 +67,41 @@ class Tacotron2():
             cell_fw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_fw_LSTM')
             cell_bw= ZoneoutLSTMCell(256, is_training, zoneout_factor_cell=0.1, zoneout_factor_output=0.1, name='encoder_bw_LSTM')
            
-            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
-            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=input_lengths, dtype=tf.float32)
+            c_outputs, c_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, c_encoder_conv_output, sequence_length=c_input_lengths, dtype=tf.float32)
+            p_outputs, p_states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, p_encoder_conv_output, sequence_length=p_input_lengths, dtype=tf.float32)
 
             # c_envoder_outpust = [N,c_T,2*encoder_lstm_units] = [N,c_T,512]
             c_encoder_outputs = tf.concat(c_outputs, axis=2) # Concat and return forward + backward outputs
             # p_envoder_outpust = [N,p_T,2*encoder_lstm_units] = [N,p_T,512]
             p_encoder_outputs = tf.concat(p_outputs, axis=2)
-            
-            
             # Concat and return character + phoneme = [N, c_T+p_T, 512]
-            encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=-1)
-            # encoder_outputs = tf.cast(encoder_outputs, tf.float32)
+            # encoder_outputs = tf.concat([c_encoder_outputs, p_encoder_outputs], axis=1)
+
         with tf.variable_scope('Decoder') as scope:
             
             if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
-                attention_mechanism = LocationSensitiveAttention(128, encoder_outputs,hparams=hp, is_training=is_training,
-                                    mask_encoder=True, memory_sequence_length = input_lengths, smoothing=False, cumulate_weights=True)
+                c_attention_mechanism = LocationSensitiveAttention(128, c_encoder_outputs,hparams=hp, is_training=is_training,
+                                    mask_encoder=True, memory_sequence_length = c_input_lengths, smoothing=False, cumulate_weights=True)
             elif hp.attention_type == 'gmm': # GMM Attention
-                attention_mechanism = GmmAttention(128, memory=encoder_outputs, memory_sequence_length = input_lengths) 
+                c_attention_mechanism = GmmAttention(128, memory=c_encoder_outputs, memory_sequence_length = c_input_lengths) 
             elif hp.attention_type == 'step_bah':
-                attention_mechanism = BahdanauStepwiseMonotonicAttention(128, encoder_outputs, memory_sequence_length = input_lengths, mode="parallel")
+                c_attention_mechanism = BahdanauStepwiseMonotonicAttention(128, c_encoder_outputs, memory_sequence_length = c_input_lengths, mode="parallel")
             elif hp.attention_type == 'mon_bah':
-                attention_mechanism = BahdanauMonotonicAttention(128, encoder_outputs, memory_sequence_length = input_lengths, normalize=True)
+                c_attention_mechanism = BahdanauMonotonicAttention(128, c_encoder_outputs, memory_sequence_length = c_input_lengths, normalize=True)
             elif hp.attention_type == 'loung':
-                attention_mechanism = LuongAttention(128, encoder_outputs, memory_sequence_length = input_lengths) 
+                c_attention_mechanism = LuongAttention(128, c_encoder_outputs, memory_sequence_length = c_input_lengths) 
+
+            if hp.attention_type == 'loc_sen': # Location Sensitivity Attention
+                p_attention_mechanism = LocationSensitiveAttention(128, p_encoder_outputs,hparams=hp, is_training=is_training,
+                                    mask_encoder=True, memory_sequence_length = p_input_lengths, smoothing=False, cumulate_weights=True)
+            elif hp.attention_type == 'gmm': # GMM Attention
+                p_attention_mechanism = GmmAttention(128, memory=p_encoder_outputs, memory_sequence_length = p_input_lengths) 
+            elif hp.attention_type == 'step_bah':
+                p_attention_mechanism = BahdanauStepwiseMonotonicAttention(128, p_encoder_outputs, memory_sequence_length = p_input_lengths, mode="parallel")
+            elif hp.attention_type == 'mon_bah':
+                p_attention_mechanism = BahdanauMonotonicAttention(128, p_encoder_outputs, memory_sequence_length = p_input_lengths, normalize=True)
+            elif hp.attention_type == 'loung':
+                p_attention_mechanism = LuongAttention(128, p_encoder_outputs, memory_sequence_length = p_input_lengths) 
 
             # attention_mechanism = LocationSensitiveAttention(128, encoder_outputs, hparams=hp, is_training=is_training, mask_encoder=True, memory_sequence_length = input_lengths, smoothing=False, cumulate_weights=True)
             #mask_encoder: whether to mask encoder padding while computing location sensitive attention. Set to True for better prosody but slower convergence.
@@ -119,55 +112,82 @@ class Tacotron2():
             decoder_lstm = tf.contrib.rnn.MultiRNNCell(decoder_lstm, state_is_tuple=True)
             # decoder_init_state = decoder_lstm.zero_state(batch_size=batch_size, dtype=tf.float32) #tensorflow1에는 없음
             
-            attention_cell = AttentionWrapper(decoder_lstm, attention_mechanism, alignment_history=True, output_attention=False)
+            c_attention_cell = AttentionWrapper(decoder_lstm, c_attention_mechanism, alignment_history=True, output_attention=False)
+            p_attention_cell = AttentionWrapper(decoder_lstm, p_attention_mechanism, alignment_history=True, output_attention=False)
 
             # attention_state_size = 256
             # Decoder input -> prenet -> decoder_lstm -> concat[output, attention]
-            dec_outputs = DecoderPrenetWrapper(attention_cell, is_training, hp.prenet_depths)
-            dec_outputs_cell = OutputProjectionWrapper(dec_outputs,(hp.num_mels) * hp.outputs_per_step)
+            c_dec_outputs = DecoderPrenetWrapper(c_attention_cell, is_training, hp.prenet_depths)
+            c_dec_outputs_cell = OutputProjectionWrapper(c_dec_outputs,(hp.num_mels) * hp.outputs_per_step)
+
+            p_dec_outputs = DecoderPrenetWrapper(p_attention_cell, is_training, hp.prenet_depths)
+            p_dec_outputs_cell = OutputProjectionWrapper(p_dec_outputs,(hp.num_mels) * hp.outputs_per_step)
 
             if is_training:
                 helper = TacoTrainingHelper(c_inputs, p_inputs, mel_targets, hp.num_mels, hp.outputs_per_step)
             else:
                 helper = TacoTestHelper(batch_size, hp.num_mels, hp.outputs_per_step)
                 
-            decoder_init_state = dec_outputs_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
-            (decoder_outputs, _), final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
-                BasicDecoder(dec_outputs_cell, helper, decoder_init_state),
+            c_decoder_init_state = c_dec_outputs_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
+            (c_decoder_outputs, _), c_final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
+                BasicDecoder(c_dec_outputs_cell, helper, c_decoder_init_state),
+                maximum_iterations=hp.max_iters)  # [N, T_out/r, M*r]
+
+            p_decoder_init_state = p_dec_outputs_cell.zero_state(batch_size=batch_size, dtype=tf.float32)
+            (p_decoder_outputs, _), p_final_decoder_state, _ = tf.contrib.seq2seq.dynamic_decode(
+                BasicDecoder(p_dec_outputs_cell, helper, p_decoder_init_state),
                 maximum_iterations=hp.max_iters)  # [N, T_out/r, M*r]
 
             # Reshape outputs to be one output per entry
-            decoder_mel_outputs = tf.reshape(decoder_outputs[:,:,:hp.num_mels * hp.outputs_per_step], [batch_size, -1, hp.num_mels])  # [N, T_out, M]
+            c_decoder_mel_outputs = tf.reshape(c_decoder_outputs[:,:,:hp.num_mels * hp.outputs_per_step], [batch_size, -1, hp.num_mels])  # [N, T_out, M]
+            p_decoder_mel_outputs = tf.reshape(p_decoder_outputs[:,:,:hp.num_mels * hp.outputs_per_step], [batch_size, -1, hp.num_mels])  # [N, T_out, M]
             #stop_token_outputs = tf.reshape(decoder_outputs[:,:,hp.num_mels * hp.outputs_per_step:], [batch_size, -1]) # [N,iters]
             
      # Postnet
-            x = decoder_mel_outputs
+            x = c_decoder_mel_outputs
             for i in range(5):
                 activation = tf.nn.tanh if i != (4) else None
                 x = tf.layers.conv1d(x,filters=512, kernel_size=5, padding='same', activation=activation, name='Postnet_{}'.format(i))
                 x = tf.layers.batch_normalization(x, training=is_training)
                 x = tf.layers.dropout(x, rate=0.5, training=is_training, name='Postnet_dropout_{}'.format(i))
  
-            residual = tf.layers.dense(x, hp.num_mels, name='residual_projection')
-            mel_outputs = decoder_mel_outputs + residual
+            c_residual = tf.layers.dense(x, hp.num_mels, name='residual_projection')
+            c_mel_outputs = c_decoder_mel_outputs + c_residual
+
+            p = p_decoder_mel_outputs
+            for i in range(5):
+                activation = tf.nn.tanh if i != (4) else None
+                p = tf.layers.conv1d(p,filters=512, kernel_size=5, padding='same', activation=activation, name='Postnet_{}'.format(i))
+                p = tf.layers.batch_normalization(p, training=is_training)
+                p = tf.layers.dropout(p, rate=0.5, training=is_training, name='Postnet_dropout_{}'.format(i))
+ 
+            p_residual = tf.layers.dense(p, hp.num_mels, name='residual_projection')
+            p_mel_outputs = p_decoder_mel_outputs + p_residual
 
             # Add post-processing CBHG:
             # mel_outputs: (N,T,num_mels)
-            post_outputs = post_cbhg(mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
-            linear_outputs = tf.layers.dense(post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
+            c_post_outputs = post_cbhg(c_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
+            c_linear_outputs = tf.layers.dense(c_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
  
+            p_post_outputs = post_cbhg(p_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
+            p_linear_outputs = tf.layers.dense(p_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
+
             # Grab alignments from the final decoder state:
-            alignments = tf.transpose(final_decoder_state.alignment_history.stack(), [1, 2, 0])  # batch_size, text length(encoder), target length(decoder)
- 
+            c_alignments = tf.transpose(c_final_decoder_state.alignment_history.stack(), [1, 2, 0])  # batch_size, text length(encoder), target length(decoder)
+            p_alignments = tf.transpose(p_final_decoder_state.alignment_history.stack(), [1, 2, 0])  # batch_size, text length(encoder), target length(decoder)
 			
             self.c_inputs = c_inputs
             self.p_inputs = p_inputs
             self.c_input_lengths = c_input_lengths
             self.p_input_lengths = p_input_lengths
-            self.decoder_mel_outputs = decoder_mel_outputs
-            self.mel_outputs = mel_outputs
-            self.linear_outputs = linear_outputs
-            self.alignments = alignments
+            self.c_decoder_mel_outputs = c_decoder_mel_outputs
+            self.c_mel_outputs = c_mel_outputs
+            self.c_linear_outputs = c_linear_outputs
+            self.p_decoder_mel_outputs = p_decoder_mel_outputs
+            self.p_mel_outputs = p_mel_outputs
+            self.p_linear_outputs = p_linear_outputs
+            self.c_alignments = c_alignments
+            self.p_alignments = p_alignments
             self.mel_targets = mel_targets
             self.linear_targets = linear_targets
             #self.stop_token_targets = stop_token_targets
@@ -177,31 +197,34 @@ class Tacotron2():
             log('  c_embedding:               %d' % c_embedded_inputs.shape[-1])
             log('  p_embedding:               %d' % p_embedded_inputs.shape[-1])
             # log('  prenet out:              %d' % prenet_outputs.shape[-1])
-            log('  encoder out:             %d' % encoder_outputs.shape[-1])
-            log('  attention out:           %d' % attention_cell.output_size)
+            log('  encoder out:             %d' % c_encoder_outputs.shape[-1])
+            log('  attention out:           %d' % c_attention_cell.output_size)
             #log('  concat attn & out:       %d' % concat_cell.output_size)
-            log('  decoder cell out:        %d' % dec_outputs_cell.output_size)
-            log('  decoder out (%d frames):  %d' % (hp.outputs_per_step, decoder_outputs.shape[-1]))
-            log('  decoder out (1 frame):   %d' % mel_outputs.shape[-1])
-            log('  postnet out:             %d' % post_outputs.shape[-1])
-            log('  linear out:              %d' % linear_outputs.shape[-1])
+            log('  decoder cell out:        %d' % c_dec_outputs_cell.output_size)
+            log('  decoder out (%d frames):  %d' % (hp.outputs_per_step, c_decoder_outputs.shape[-1]))
+            log('  decoder out (1 frame):   %d' % c_mel_outputs.shape[-1])
+            log('  postnet out:             %d' % c_post_outputs.shape[-1])
+            log('  linear out:              %d' % c_linear_outputs.shape[-1])
 
     def add_loss(self):
         '''Adds loss to the model. Sets "loss" field. initialize must have been called.'''
         with tf.variable_scope('loss') as scope:
             hp = self._hparams
-            before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
-            after = tf.losses.mean_squared_error(self.mel_targets, self.mel_outputs)
-    
-            self.mel_loss = before + after
+            c_before = tf.losses.mean_squared_error(self.mel_targets, self.c_decoder_mel_outputs)
+            c_after = tf.losses.mean_squared_error(self.mel_targets, self.c_mel_outputs)
+            p_before = tf.losses.mean_squared_error(self.mel_targets, self.p_decoder_mel_outputs)
+            p_after = tf.losses.mean_squared_error(self.mel_targets, self.p_mel_outputs) 
+
+            self.mel_loss = c_before + c_after + p_before + p_after
 
 
             #self.stop_token_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.stop_token_targets, logits=self.stop_token_outputs))
 
-            l1 = tf.abs(self.linear_targets - self.linear_outputs)
+            c_l1 = tf.abs(self.linear_targets - self.c_linear_outputs)
+            p_l1 = tf.abs(self.linear_targets - self.p_linear_outputs)
             # Prioritize loss for frequencies under 3000 Hz.
             n_priority_freq = int(3000 / (hp.sample_rate * 0.5) * hp.num_freq)
-            self.linear_loss = 0.5 * tf.reduce_mean(l1) + 0.5 * tf.reduce_mean(l1[:, :, 0:n_priority_freq])
+            self.linear_loss = 0.5 * tf.reduce_mean(c_l1) + 0.5 * tf.reduce_mean(c_l1[:, :, 0:n_priority_freq]) + 0.5 * tf.reduce_mean(p_l1) + 0.5 * tf.reduce_mean(p_l1[:, :, 0:n_priority_freq])
 
             self.regularization = tf.add_n([tf.nn.l2_loss(v) for v in self.all_vars
 						if not('bias' in v.name or 'Bias' in v.name or '_projection' in v.name or 'inputs_embedding' in v.name
