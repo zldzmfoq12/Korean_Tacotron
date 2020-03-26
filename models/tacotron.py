@@ -5,7 +5,7 @@ from tensorflow.contrib.seq2seq import BasicDecoder, BahdanauAttention, Attentio
 from text.symbols import symbols
 from util.infolog import log
 from .helpers import TacoTestHelper, TacoTrainingHelper
-from .modules import encoder_cbhg, post_cbhg, prenet, LocationSensitiveAttention, ZoneoutLSTMCell, GmmAttention, BahdanauStepwiseMonotonicAttention
+from .modules import encoder_cbhg, post_cbhg, p_post_cbhg, prenet, LocationSensitiveAttention, ZoneoutLSTMCell, GmmAttention, BahdanauStepwiseMonotonicAttention
 from .rnn_wrappers import DecoderPrenetWrapper, ConcatOutputAndAttentionWrapper
 
 
@@ -35,7 +35,7 @@ class Tacotron2():
         with tf.variable_scope('inference') as scope:
             is_training = linear_targets is not None
             batch_size = tf.shape(c_inputs)[0]
-            input_lengths = c_input_lengths+p_input_lengths #for concat character and phoneme
+            # input_lengths = c_input_lengths+p_input_lengths #for concat character and phoneme
             hp = self._hparams
 
             # Embeddings
@@ -169,7 +169,7 @@ class Tacotron2():
             c_post_outputs = post_cbhg(c_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
             c_linear_outputs = tf.layers.dense(c_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
  
-            p_post_outputs = post_cbhg(p_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
+            p_post_outputs = p_post_cbhg(p_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
             p_linear_outputs = tf.layers.dense(p_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
 
             # Grab alignments from the final decoder state:
