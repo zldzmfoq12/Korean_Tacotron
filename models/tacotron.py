@@ -212,12 +212,12 @@ class Tacotron2():
         '''Adds loss to the model. Sets "loss" field. initialize must have been called.'''
         with tf.variable_scope('loss') as scope:
             hp = self._hparams
-            before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
+            # before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
             after = tf.losses.mean_squared_error(self.mel_targets, self.mel_outputs)
             # p_before = tf.losses.mean_squared_error(self.mel_targets, self.p_decoder_mel_outputs)
             # p_after = tf.losses.mean_squared_error(self.mel_targets, self.p_mel_outputs) 
 
-            self.mel_loss = before + after
+            self.mel_loss = after
 
 
             #self.stop_token_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.stop_token_targets, logits=self.stop_token_outputs))
