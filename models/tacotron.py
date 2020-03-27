@@ -141,6 +141,7 @@ class Tacotron2():
             # Reshape outputs to be one output per entry
             c_decoder_mel_outputs = tf.reshape(c_decoder_outputs[:,:,:hp.num_mels * hp.outputs_per_step], [batch_size, -1, hp.num_mels])  # [N, T_out, M]
             p_decoder_mel_outputs = tf.reshape(p_decoder_outputs[:,:,:hp.num_mels * hp.outputs_per_step], [batch_size, -1, hp.num_mels])  # [N, T_out, M]
+            decoder_mel_outputs = c_decoder_mel_outputs + p_decoder_mel_outputs
             #stop_token_outputs = tf.reshape(decoder_outputs[:,:,hp.num_mels * hp.outputs_per_step:], [batch_size, -1]) # [N,iters]
             
      # Postnet
@@ -150,27 +151,28 @@ class Tacotron2():
                 x = tf.layers.conv1d(x,filters=512, kernel_size=5, padding='same', activation=activation, name='C_Postnet_{}'.format(i))
                 x = tf.layers.batch_normalization(x, training=is_training)
                 x = tf.layers.dropout(x, rate=0.5, training=is_training, name='C_Postnet_dropout_{}'.format(i))
- 
-            c_residual = tf.layers.dense(x, hp.num_mels, name='c_residual_projection')
-            c_mel_outputs = c_decoder_mel_outputs + c_residual
-
+            
             p = p_decoder_mel_outputs
-            for i in range(5):
-                activation = tf.nn.tanh if i != (4) else None
-                p = tf.layers.conv1d(p,filters=512, kernel_size=5, padding='same', activation=activation, name='P_Postnet_{}'.format(i))
-                p = tf.layers.batch_normalization(p, training=is_training)
-                p = tf.layers.dropout(p, rate=0.5, training=is_training, name='P_Postnet_dropout_{}'.format(i))
- 
             p_residual = tf.layers.dense(p, hp.num_mels, name='p_residual_projection')
-            p_mel_outputs = p_decoder_mel_outputs + p_residual
+            mel_outputs = c_decoder_mel_outputs + p_residual
+
+            
+            # for i in range(5):
+            #     activation = tf.nn.tanh if i != (4) else None
+            #     p = tf.layers.conv1d(p,filters=512, kernel_size=5, padding='same', activation=activation, name='P_Postnet_{}'.format(i))
+            #     p = tf.layers.batch_normalization(p, training=is_training)
+            #     p = tf.layers.dropout(p, rate=0.5, training=is_training, name='P_Postnet_dropout_{}'.format(i))
+ 
+            # p_residual = tf.layers.dense(p, hp.num_mels, name='p_residual_projection')
+            # p_mel_outputs = p_decoder_mel_outputs + p_residual
 
             # Add post-processing CBHG:
             # mel_outputs: (N,T,num_mels)
-            c_post_outputs = post_cbhg(c_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
-            c_linear_outputs = tf.layers.dense(c_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
+            post_outputs = post_cbhg(mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
+            linear_outputs = tf.layers.dense(post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
  
-            p_post_outputs = p_post_cbhg(p_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
-            p_linear_outputs = tf.layers.dense(p_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
+            # p_post_outputs = p_post_cbhg(p_mel_outputs, hp.num_mels, is_training, hp.postnet_depth)
+            # p_linear_outputs = tf.layers.dense(p_post_outputs, hp.num_freq)    # [N, T_out, F(1025)]
 
             # Grab alignments from the final decoder state:
             c_alignments = tf.transpose(c_final_decoder_state.alignment_history.stack(), [1, 2, 0])  # batch_size, text length(encoder), target length(decoder)
@@ -180,12 +182,12 @@ class Tacotron2():
             self.p_inputs = p_inputs
             self.c_input_lengths = c_input_lengths
             self.p_input_lengths = p_input_lengths
-            self.c_decoder_mel_outputs = c_decoder_mel_outputs
-            self.c_mel_outputs = c_mel_outputs
-            self.c_linear_outputs = c_linear_outputs
-            self.p_decoder_mel_outputs = p_decoder_mel_outputs
-            self.p_mel_outputs = p_mel_outputs
-            self.p_linear_outputs = p_linear_outputs
+            self.decoder_mel_outputs = decoder_mel_outputs
+            self.mel_outputs = mel_outputs
+            self.linear_outputs = linear_outputs
+            # self.p_decoder_mel_outputs = p_decoder_mel_outputs
+            # self.p_mel_outputs = p_mel_outputs
+            # self.p_linear_outputs = p_linear_outputs
             self.c_alignments = c_alignments
             self.p_alignments = p_alignments
             self.mel_targets = mel_targets
@@ -202,29 +204,29 @@ class Tacotron2():
             #log('  concat attn & out:       %d' % concat_cell.output_size)
             log('  decoder cell out:        %d' % c_dec_outputs_cell.output_size)
             log('  decoder out (%d frames):  %d' % (hp.outputs_per_step, c_decoder_outputs.shape[-1]))
-            log('  decoder out (1 frame):   %d' % c_mel_outputs.shape[-1])
-            log('  postnet out:             %d' % c_post_outputs.shape[-1])
-            log('  linear out:              %d' % c_linear_outputs.shape[-1])
+            log('  decoder out (1 frame):   %d' % mel_outputs.shape[-1])
+            log('  postnet out:             %d' % post_outputs.shape[-1])
+            log('  linear out:              %d' % linear_outputs.shape[-1])
 
     def add_loss(self):
         '''Adds loss to the model. Sets "loss" field. initialize must have been called.'''
         with tf.variable_scope('loss') as scope:
             hp = self._hparams
-            c_before = tf.losses.mean_squared_error(self.mel_targets, self.c_decoder_mel_outputs)
-            c_after = tf.losses.mean_squared_error(self.mel_targets, self.c_mel_outputs)
-            p_before = tf.losses.mean_squared_error(self.mel_targets, self.p_decoder_mel_outputs)
-            p_after = tf.losses.mean_squared_error(self.mel_targets, self.p_mel_outputs) 
+            before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
+            after = tf.losses.mean_squared_error(self.mel_targets, self.mel_outputs)
+            # p_before = tf.losses.mean_squared_error(self.mel_targets, self.p_decoder_mel_outputs)
+            # p_after = tf.losses.mean_squared_error(self.mel_targets, self.p_mel_outputs) 
 
-            self.mel_loss = c_before + c_after + p_before + p_after
+            self.mel_loss = before + after
 
 
             #self.stop_token_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.stop_token_targets, logits=self.stop_token_outputs))
 
-            c_l1 = tf.abs(self.linear_targets - self.c_linear_outputs)
-            p_l1 = tf.abs(self.linear_targets - self.p_linear_outputs)
+            l1 = tf.abs(self.linear_targets - self.linear_outputs)
+            # p_l1 = tf.abs(self.linear_targets - self.p_linear_outputs)
             # Prioritize loss for frequencies under 3000 Hz.
             n_priority_freq = int(3000 / (hp.sample_rate * 0.5) * hp.num_freq)
-            self.linear_loss = 0.5 * tf.reduce_mean(c_l1) + 0.5 * tf.reduce_mean(c_l1[:, :, 0:n_priority_freq]) + 0.5 * tf.reduce_mean(p_l1) + 0.5 * tf.reduce_mean(p_l1[:, :, 0:n_priority_freq])
+            self.linear_loss = 0.5 * tf.reduce_mean(l1) + 0.5 * tf.reduce_mean(l1[:, :, 0:n_priority_freq])
 
             self.regularization = tf.add_n([tf.nn.l2_loss(v) for v in self.all_vars
 						if not('bias' in v.name or 'Bias' in v.name or '_projection' in v.name or 'inputs_embedding' in v.name

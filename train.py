@@ -25,9 +25,9 @@ def get_git_commit():
 
 def add_stats(model):
 	with tf.variable_scope('stats') as scope:
-		tf.summary.histogram('linear_outputs', model.p_linear_outputs)
+		tf.summary.histogram('linear_outputs', model.linear_outputs)
 		tf.summary.histogram('linear_targets', model.linear_targets)
-		tf.summary.histogram('mel_outputs', model.p_mel_outputs)
+		tf.summary.histogram('mel_outputs', model.mel_outputs)
 		tf.summary.histogram('mel_targets', model.mel_targets)
 		tf.summary.scalar('loss_mel', model.mel_loss)
 		tf.summary.scalar('loss_linear', model.linear_loss)
@@ -110,7 +110,7 @@ def train(log_dir, args):
 					saver.save(sess, checkpoint_path, global_step=step)
 					log('Saving audio and alignment...')
 					c_input_seq, spectrogram, alignment = sess.run([
-						model.c_inputs[0], model.p_linear_outputs[0], model.p_alignments[0]])
+						model.c_inputs[0], model.linear_outputs[0], model.c_alignments[0]])
 					waveform = audio.inv_spectrogram(spectrogram.T)
 					audio.save_wav(waveform, os.path.join(log_dir, 'step-%d-audio.wav' % step))
 					plot.plot_alignment(alignment, os.path.join(log_dir, 'step-%d-align.png' % step),
