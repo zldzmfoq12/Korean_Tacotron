@@ -145,15 +145,14 @@ class Tacotron2():
             #stop_token_outputs = tf.reshape(decoder_outputs[:,:,hp.num_mels * hp.outputs_per_step:], [batch_size, -1]) # [N,iters]
             
      # Postnet
-            x = c_decoder_mel_outputs
+            x = p_decoder_mel_outputs
             for i in range(5):
                 activation = tf.nn.tanh if i != (4) else None
                 x = tf.layers.conv1d(x,filters=512, kernel_size=5, padding='same', activation=activation, name='C_Postnet_{}'.format(i))
                 x = tf.layers.batch_normalization(x, training=is_training)
                 x = tf.layers.dropout(x, rate=0.5, training=is_training, name='C_Postnet_dropout_{}'.format(i))
             
-            p = p_decoder_mel_outputs
-            p_residual = tf.layers.dense(p, hp.num_mels, name='p_residual_projection')
+            p_residual = tf.layers.dense(x, hp.num_mels, name='p_residual_projection')
             mel_outputs = c_decoder_mel_outputs + p_residual
 
             
@@ -212,12 +211,12 @@ class Tacotron2():
         '''Adds loss to the model. Sets "loss" field. initialize must have been called.'''
         with tf.variable_scope('loss') as scope:
             hp = self._hparams
-            # before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
+            before = tf.losses.mean_squared_error(self.mel_targets, self.decoder_mel_outputs)
             after = tf.losses.mean_squared_error(self.mel_targets, self.mel_outputs)
             # p_before = tf.losses.mean_squared_error(self.mel_targets, self.p_decoder_mel_outputs)
             # p_after = tf.losses.mean_squared_error(self.mel_targets, self.p_mel_outputs) 
 
-            self.mel_loss = after
+            self.mel_loss = before + after
 
 
             #self.stop_token_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=self.stop_token_targets, logits=self.stop_token_outputs))
