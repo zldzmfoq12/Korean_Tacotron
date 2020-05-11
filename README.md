@@ -1,4 +1,4 @@
-# Tacotron2
+# Korean_Tacotron
 
 Korean Speech Synthesis with Tacotron
 
